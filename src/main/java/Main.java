@@ -2,6 +2,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.Arrays;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -43,14 +44,30 @@ public class Main {
     }
   }
 
+  // *2
   public static void handleClient(Socket clientSocket) {
     try{
       while(true) {
         byte[] input = new byte[1024];
         clientSocket.getInputStream().read(input);
         String inputString = new String(input).trim();
+
         System.out.println("Received: " + inputString);
-        clientSocket.getOutputStream().write("+PONG\r\n".getBytes());
+        String[] splitedString = inputString.split("\r\n");
+
+        for (int i = 2; i < splitedString.length; i++) {
+          switch (splitedString[i].toLowerCase()) {
+            case "echo":
+              i = i + 2;
+              String opSttring = "+"+splitedString[i]+"\r\n";
+              clientSocket.getOutputStream().write(opSttring.getBytes());
+              break;
+            case "ping":
+              clientSocket.getOutputStream().write("+PONG\r\n".getBytes());
+              break;
+          }
+          i++;
+        }
       }
     } catch (Exception e) {
       System.out.println("IOException: " + e.getMessage());
