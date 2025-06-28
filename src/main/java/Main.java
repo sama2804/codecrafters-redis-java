@@ -20,11 +20,11 @@ public class Main {
           clientSocket = serverSocket.accept();
 
           while(true) {
-
-            String inputString = String.valueOf(clientSocket.getInputStream().read());
+            byte[] input = new byte[1024];
+            clientSocket.getInputStream().read(input);
+            String inputString = new String(input).trim();
             System.out.println("Received: " + inputString);
-            OutputStream outputStream = clientSocket.getOutputStream();
-            outputStream.write("+PONG\r\n".getBytes());
+            clientSocket.getOutputStream().write("+PONG\r\n".getBytes());
           }
 
         } catch (IOException e) {
