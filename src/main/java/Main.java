@@ -1,8 +1,8 @@
-import java.io.IOException;
-import java.io.OutputStream;
+import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -23,7 +23,6 @@ public class Main {
       // ensures that we don't run into 'Address already in use' errors
       serverSocket.setReuseAddress(true);
       // Wait for connection from client.
-
       while (true) {
         clientSocket = serverSocket.accept();
         Socket clientCopy = clientSocket;
@@ -44,13 +43,17 @@ public class Main {
     }
   }
 
-  // *2
   public static void handleClient(Socket clientSocket) {
+    HashMap<String, String> map = new HashMap<>();
     try{
       while(true) {
         byte[] input = new byte[1024];
         clientSocket.getInputStream().read(input);
         String inputString = new String(input).trim();
+
+        if (inputString.length() == 0) {
+          continue;
+        }
 
         System.out.println("Received: " + inputString);
         String[] splitedString = inputString.split("\r\n");
@@ -59,12 +62,31 @@ public class Main {
           switch (splitedString[i].toLowerCase()) {
             case "echo":
               i = i + 2;
-              String opSttring = "+"+splitedString[i]+"\r\n";
-              clientSocket.getOutputStream().write(opSttring.getBytes());
+              String opString = "+"+splitedString[i]+"\r\n";
+              clientSocket.getOutputStream().write(opString.getBytes());
               break;
             case "ping":
               clientSocket.getOutputStream().write("+PONG\r\n".getBytes());
               break;
+            case "set":
+              i = i + 2;
+              String key = splitedString[i];
+              i = i + 2;
+              String value = splitedString[i];
+              map.put(key, value);
+              clientSocket.getOutputStream().write("+OK\r\n".getBytes());
+              break;
+            case "get":
+              i = i + 2;
+              String getKey = splitedString[i];
+              if (map.containsKey(getKey)) {
+                String getValue = map.get(getKey);
+                int len = getValue.length();
+                String res = "$"+len+"\r\n"+getValue+"\r\n";
+                clientSocket.getOutputStream().write(res.getBytes());
+              } else {
+                clientSocket.getOutputStream().write("$-1\r\n".getBytes());
+              }
           }
           i++;
         }
