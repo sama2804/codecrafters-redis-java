@@ -17,6 +17,12 @@ public class Main {
     ExecutorService executorService = Executors.newFixedThreadPool(10);
 
     try {
+      for (int i = 0; i < args.length - 1; i++) {
+        if (args[i].equals("--port")) {
+          port = Integer.parseInt(args[i+1]);
+          break;
+        }
+      }
       serverSocket = new ServerSocket(port);
       // Since the tester restarts your program quite often, setting SO_REUSEADDR
       // ensures that we don't run into 'Address already in use' errors
