@@ -146,13 +146,18 @@ public class Main {
               }
               break;
             case "info":
+              String infoReplicationResp = "";
               if (i+2 < splitedString.length && splitedString[i+2].toLowerCase().equals("replication")) {
                 // info command called with replication. Respond with only replication info
                 if (isMaster) {
-                  clientSocket.getOutputStream().write("$11\r\nrole:master\r\n".getBytes());
+                  // The length in Bulk_String such as below is total length of all characters between first and last \r\n
+                  // In the case below, total length is 89 = 85 for the string + 4 for the escape characters
+                  infoReplicationResp = "$89\r\nrole:master\r\nmaster_replid:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb\r\nmaster_repl_offset:0\r\n";
                 } else {
-                  clientSocket.getOutputStream().write("$10\r\nrole:slave\r\n".getBytes());
+                  infoReplicationResp = "$88\r\nrole:slave\r\nmaster_replid:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb\r\nmaster_repl_offset:0\r\n";
                 }
+                System.out.println(infoReplicationResp);
+                clientSocket.getOutputStream().write(infoReplicationResp.getBytes());
               }
               // ToDo: Add support for info command called without replication. Respond with all info
               break;
