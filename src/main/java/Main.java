@@ -54,12 +54,16 @@ public class Main {
 
     String dir = "";
     String dbfilename = "";
+    boolean isMaster = true;
 
     for (int i = 0; i<args.length; i++) {
       if (args[i].equals("--dir") && i+1 < args.length) {
         dir = args[i+1];
       } else if (args[i].equals("--dbfilename") && i+1 < args.length) {
         dbfilename = args[i+1];
+      } else if (args[i].equals("--replicaof")) {
+        //ToDo: Add support master port and master ip
+        isMaster=false;
       }
     }
 
@@ -144,11 +148,13 @@ public class Main {
             case "info":
               if (i+2 < splitedString.length && splitedString[i+2].toLowerCase().equals("replication")) {
                 // info command called with replication. Respond with only replication info
-                clientSocket.getOutputStream().write("$11\r\nrole:master\r\n".getBytes());
-              } else if (i+2 >= splitedString.length) {
-                // info command called without replication. Respond with all info
-                clientSocket.getOutputStream().write("$11\r\nrole:master\r\n".getBytes());
+                if (isMaster) {
+                  clientSocket.getOutputStream().write("$11\r\nrole:master\r\n".getBytes());
+                } else {
+                  clientSocket.getOutputStream().write("$10\r\nrole:slave\r\n".getBytes());
+                }
               }
+              // ToDo: Add support for info command called without replication. Respond with all info
               break;
           }
           i++;
