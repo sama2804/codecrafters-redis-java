@@ -141,6 +141,15 @@ public class Main {
                 clientSocket.getOutputStream().write(respString.getBytes());
               }
               break;
+            case "info":
+              if (i+2 < splitedString.length && splitedString[i+2].toLowerCase().equals("replication")) {
+                // info command called with replication. Respond with only replication info
+                clientSocket.getOutputStream().write("$11\r\nrole:master\r\n".getBytes());
+              } else if (i+2 >= splitedString.length) {
+                // info command called without replication. Respond with all info
+                clientSocket.getOutputStream().write("$11\r\nrole:master\r\n".getBytes());
+              }
+              break;
           }
           i++;
         }
