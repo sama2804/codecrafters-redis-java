@@ -16,7 +16,6 @@ public class Main {
     int port = 6379;
     ExecutorService executorService = Executors.newFixedThreadPool(10);
 
-
     try {
       serverSocket = new ServerSocket(port);
       // Since the tester restarts your program quite often, setting SO_REUSEADDR
@@ -26,7 +25,7 @@ public class Main {
       while (true) {
         clientSocket = serverSocket.accept();
         Socket clientCopy = clientSocket;
-        executorService.submit(() -> handleClient(clientCopy));
+        executorService.submit(() -> handleClient(clientCopy, args));
       }
 
     } catch (IOException e) {
@@ -43,9 +42,20 @@ public class Main {
     }
   }
 
-  public static void handleClient(Socket clientSocket) {
+  public static void handleClient(Socket clientSocket, String[] args) {
     HashMap<String, String> map = new HashMap<>();
     HashMap<String, Long> expiryMap = new HashMap<>();
+
+    String dir = "";
+    String dbfilename = "";
+
+    for (int i = 0; i<args.length; i++) {
+      if (args[i].equals("--dir") && i+1 < args.length) {
+        dir = args[i+1];
+      } else if (args[i].equals("--dbfilename") && i+1 < args.length) {
+        dbfilename = args[i+1];
+      }
+    }
 
     try{
       while(true) {
@@ -108,6 +118,21 @@ public class Main {
                 }
               } else {
                 clientSocket.getOutputStream().write("$-1\r\n".getBytes());
+              }
+              break;
+            case "config":
+              if (i+2 < splitedString.length && splitedString[i+2].toLowerCase().equals("get")) {
+                i = i + 4;
+                String configGetKey = splitedString[i];
+                String respString = "";
+                if (configGetKey.equals("dir")) {
+                  respString = "*2\r\n$3\r\ndir\r\n$"+dir.length()+"\r\n"+dir+"\r\n";
+
+                } else if (configGetKey.equals("dbfilename")) {
+                  respString = "*2\r\n$3\r\ndbfilename\r\n$"+dbfilename.length()+"\r\n"+dbfilename+"\r\n";
+
+                }
+                clientSocket.getOutputStream().write(respString.getBytes());
               }
               break;
           }
