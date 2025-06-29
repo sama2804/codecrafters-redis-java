@@ -14,15 +14,29 @@ public class Main {
     ServerSocket serverSocket = null;
     Socket clientSocket = null;
     int port = 6379;
+    String masterHost = "";
+    int masterPort = 0;
     ExecutorService executorService = Executors.newFixedThreadPool(10);
 
     try {
-      for (int i = 0; i < args.length - 1; i++) {
+      for (int i = 0; i < args.length; i++) {
         if (args[i].equals("--port")) {
           port = Integer.parseInt(args[i+1]);
-          break;
+          System.out.println("port: " + port);
+        } else if (args[i].equals("--replicaof")) {
+          String masterHostAndPort = args[i+1];
+          masterHost = masterHostAndPort.split(" ")[0];
+          masterPort = Integer.parseInt(masterHostAndPort.split(" ")[1]);
+          Socket masterServerSocket = new Socket(masterHost, masterPort);
+          masterServerSocket.getOutputStream().write("*1\r\n$4\r\nPING\r\n".getBytes());
+
+          byte[] input = new byte[1024];
+          masterServerSocket.getInputStream().read(input);
+          String inputString = new String(input).trim();
+          System.out.println("Received: " + inputString);
         }
       }
+
       serverSocket = new ServerSocket(port);
       // Since the tester restarts your program quite often, setting SO_REUSEADDR
       // ensures that we don't run into 'Address already in use' errors
@@ -62,7 +76,6 @@ public class Main {
       } else if (args[i].equals("--dbfilename") && i+1 < args.length) {
         dbfilename = args[i+1];
       } else if (args[i].equals("--replicaof")) {
-        //ToDo: Add support master port and master ip
         isMaster=false;
       }
     }
@@ -77,7 +90,7 @@ public class Main {
           continue;
         }
 
-        System.out.println("Received: " + inputString);
+        System.out.println("Client Received: " + inputString);
         String[] splitedString = inputString.split("\r\n");
 
         for (int i = 2; i < splitedString.length; i++) {
@@ -156,7 +169,6 @@ public class Main {
                 } else {
                   infoReplicationResp = "$88\r\nrole:slave\r\nmaster_replid:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb\r\nmaster_repl_offset:0\r\n";
                 }
-                System.out.println(infoReplicationResp);
                 clientSocket.getOutputStream().write(infoReplicationResp.getBytes());
               }
               // ToDo: Add support for info command called without replication. Respond with all info
