@@ -1,6 +1,7 @@
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -44,6 +45,8 @@ public class Main {
 
   public static void handleClient(Socket clientSocket) {
     HashMap<String, String> map = new HashMap<>();
+    HashMap<String, Long> expiryMap = new HashMap<>();
+
     try{
       while(true) {
         byte[] input = new byte[1024];
@@ -68,24 +71,45 @@ public class Main {
               clientSocket.getOutputStream().write("+PONG\r\n".getBytes());
               break;
             case "set":
+
+              Instant currentTimestamp = Instant.now();
+              long epochMilli = currentTimestamp.toEpochMilli();
+
               i = i + 2;
               String key = splitedString[i];
               i = i + 2;
               String value = splitedString[i];
               map.put(key, value);
+
+              if ( (i+2) < splitedString.length && splitedString[i + 2].toLowerCase().equals("px")) {
+                i = i+4;
+                long expiry =  Long.parseLong(splitedString[i]);
+                expiryMap.put(key, epochMilli + expiry);
+              }
               clientSocket.getOutputStream().write("+OK\r\n".getBytes());
               break;
             case "get":
               i = i + 2;
               String getKey = splitedString[i];
               if (map.containsKey(getKey)) {
-                String getValue = map.get(getKey);
-                int len = getValue.length();
-                String res = "$"+len+"\r\n"+getValue+"\r\n";
-                clientSocket.getOutputStream().write(res.getBytes());
+
+                Instant currentGetTimestamp = Instant.now();
+                long getEpochMilli = currentGetTimestamp.toEpochMilli();
+
+                if (expiryMap.containsKey(getKey) && expiryMap.get(getKey) < getEpochMilli) {
+                  map.remove(getKey);
+                  expiryMap.remove(getKey);
+                  clientSocket.getOutputStream().write("$-1\r\n".getBytes());
+                } else {
+                  String getValue = map.get(getKey);
+                  int len = getValue.length();
+                  String res = "$"+len+"\r\n"+getValue+"\r\n";
+                  clientSocket.getOutputStream().write(res.getBytes());
+                }
               } else {
                 clientSocket.getOutputStream().write("$-1\r\n".getBytes());
               }
+              break;
           }
           i++;
         }
