@@ -24,6 +24,7 @@ public class Main {
           port = Integer.parseInt(args[i+1]);
           System.out.println("port: " + port);
         } else if (args[i].equals("--replicaof")) {
+
           String masterHostAndPort = args[i+1];
           masterHost = masterHostAndPort.split(" ")[0];
           masterPort = Integer.parseInt(masterHostAndPort.split(" ")[1]);
@@ -33,7 +34,17 @@ public class Main {
           byte[] input = new byte[1024];
           masterServerSocket.getInputStream().read(input);
           String inputString = new String(input).trim();
-          System.out.println("Received: " + inputString);
+          System.out.println("Client Received: " + inputString);
+          if (inputString.length() != 0) {
+            String[] splitedString = inputString.split("\r\n");
+            if (splitedString[0].equals("+PONG")) {
+              String replConfOutput = "*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n"+ port +"\r\n";
+              masterServerSocket.getOutputStream().write(replConfOutput.getBytes());
+
+              String replConfCapaPSync2 = "*3\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n";
+              masterServerSocket.getOutputStream().write(replConfCapaPSync2.getBytes());
+            }
+          }
         }
       }
 
