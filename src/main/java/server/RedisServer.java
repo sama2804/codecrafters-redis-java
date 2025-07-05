@@ -53,6 +53,7 @@ public class RedisServer {
     private static void handleClient(Socket clientSocket) {
         HashMap<String, String> map = new HashMap<>();
         HashMap<String, Long> expiryMap = new HashMap<>();
+        boolean psync2Received = false;
 
         try{
             while(true) {
@@ -84,10 +85,16 @@ public class RedisServer {
                             } else if (splitedString[i].equals("capa")) {
                                 i = i + 2;
                                 if (splitedString[i].equals("psync2")) {
+                                    psync2Received = true;
                                     clientSocket.getOutputStream().write("+OK\r\n".getBytes());
                                 }
                             }
                             break;
+                        case "psync":
+                            i = i + 2;
+                            if (splitedString[i].equals("?") && splitedString[i+2].equals("-1")) {
+                                clientSocket.getOutputStream().write("+FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0\r\n".getBytes());
+                            }
                         case "set":
                             Instant currentTimestamp = Instant.now();
                             long epochMilli = currentTimestamp.toEpochMilli();
