@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -94,6 +95,12 @@ public class RedisServer {
                             i = i + 2;
                             if (splitedString[i].equals("?") && splitedString[i+2].equals("-1")) {
                                 clientSocket.getOutputStream().write("+FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0\r\n".getBytes());
+                                clientSocket.getOutputStream().flush();
+
+                                byte[] contents = Base64.getDecoder()
+                                        .decode("UkVESVMwMDEx+glyZWRpcy12ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPoFY3RpbWXCbQi8ZfoIdXNlZC1tZW3CsMQQAPoIYW9mLWJhc2XAAP/wbjv+wP9aog==");
+                                clientSocket.getOutputStream().write(("$" + contents.length + "\r\n").getBytes());
+                                clientSocket.getOutputStream().write(contents);
                             }
                         case "set":
                             Instant currentTimestamp = Instant.now();
