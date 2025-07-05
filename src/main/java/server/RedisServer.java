@@ -77,8 +77,18 @@ public class RedisServer {
                         case "ping":
                             clientSocket.getOutputStream().write("+PONG\r\n".getBytes());
                             break;
+                        case "replconf":
+                            i = i + 2;
+                            if (splitedString[i].equals("listening-port")) {
+                                clientSocket.getOutputStream().write("+OK\r\n".getBytes());
+                            } else if (splitedString[i].equals("capa")) {
+                                i = i + 2;
+                                if (splitedString[i].equals("psync2")) {
+                                    clientSocket.getOutputStream().write("+OK\r\n".getBytes());
+                                }
+                            }
+                            break;
                         case "set":
-
                             Instant currentTimestamp = Instant.now();
                             long epochMilli = currentTimestamp.toEpochMilli();
 
