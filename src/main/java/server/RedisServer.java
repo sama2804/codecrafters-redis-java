@@ -6,8 +6,10 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -16,7 +18,7 @@ public class RedisServer {
     private RedisServerConfig config = null;
     private ServerSocket serverSocket = null;
     private Socket clientSocket = null;
-    private Socket replicaSocket = null;
+    private List<Socket> replicaSocketList = new ArrayList<>();
 
     ExecutorService executorService = Executors.newFixedThreadPool(10);
 
@@ -83,7 +85,7 @@ public class RedisServer {
                         case "replconf":
                             i = i + 2;
                             if (splitedString[i].equals("listening-port")) {
-                                replicaSocket = clientSocket;
+                                replicaSocketList.add(clientSocket);
                                 clientSocket.getOutputStream().write("+OK\r\n".getBytes());
                             } else if (splitedString[i].equals("capa")) {
                                 i = i + 2;
@@ -120,11 +122,13 @@ public class RedisServer {
                             }
                             clientSocket.getOutputStream().write("+OK\r\n".getBytes());
 
-                            if (replicaSocket != null) {
-                                String res = inputString + "\r\n";
-                                replicaSocket.getOutputStream().write(res.getBytes());
-                            } else {
-                                System.out.println("Replica Socket is null");
+                            for (Socket replicaSocket : replicaSocketList) {
+                                if (replicaSocket != null) {
+                                    String res = inputString + "\r\n";
+                                    replicaSocket.getOutputStream().write(res.getBytes());
+                                } else {
+                                    System.out.println("Replica Socket is null");
+                                }
                             }
                             break;
                         case "get":
