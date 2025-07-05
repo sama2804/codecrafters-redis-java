@@ -31,14 +31,14 @@ public class RedisServer {
             if (config.isReplica()) {
                 ReplicaServer replicaServer = new ReplicaServer(config);
                 replicaServer.start();
-            }
-
-            serverSocket = new ServerSocket(config.getPort());
-            serverSocket.setReuseAddress(true);
-            while (true) {
-                clientSocket = serverSocket.accept();
-                Socket clientCopy = clientSocket;
-                executorService.submit(() -> handleClient(clientCopy));
+            } else {
+                serverSocket = new ServerSocket(config.getPort());
+                serverSocket.setReuseAddress(true);
+                while (true) {
+                    clientSocket = serverSocket.accept();
+                    Socket clientCopy = clientSocket;
+                    executorService.submit(() -> handleClient(clientCopy));
+                }
             }
 
         } catch (IOException e) {
