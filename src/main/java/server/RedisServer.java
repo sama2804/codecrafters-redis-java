@@ -13,9 +13,11 @@ import java.util.concurrent.Executors;
 
 public class RedisServer {
 
-    private static RedisServerConfig config = null;
+    private RedisServerConfig config = null;
     private ServerSocket serverSocket = null;
     private Socket clientSocket = null;
+    private Socket replicaSocket = null;
+
     ExecutorService executorService = Executors.newFixedThreadPool(10);
 
     public RedisServer(RedisServerConfig redisServerConfig) {
@@ -51,10 +53,9 @@ public class RedisServer {
         }
     }
 
-    private static void handleClient(Socket clientSocket) {
+    private void handleClient(Socket clientSocket) {
         HashMap<String, String> map = new HashMap<>();
         HashMap<String, Long> expiryMap = new HashMap<>();
-        boolean psync2Received = false;
 
         try{
             while(true) {
@@ -82,11 +83,11 @@ public class RedisServer {
                         case "replconf":
                             i = i + 2;
                             if (splitedString[i].equals("listening-port")) {
+                                replicaSocket = clientSocket;
                                 clientSocket.getOutputStream().write("+OK\r\n".getBytes());
                             } else if (splitedString[i].equals("capa")) {
                                 i = i + 2;
                                 if (splitedString[i].equals("psync2")) {
-                                    psync2Received = true;
                                     clientSocket.getOutputStream().write("+OK\r\n".getBytes());
                                 }
                             }
@@ -118,6 +119,13 @@ public class RedisServer {
                                 expiryMap.put(key, epochMilli + expiry);
                             }
                             clientSocket.getOutputStream().write("+OK\r\n".getBytes());
+
+                            if (replicaSocket != null) {
+                                String res = inputString + "\r\n";
+                                replicaSocket.getOutputStream().write(res.getBytes());
+                            } else {
+                                System.out.println("Replica Socket is null");
+                            }
                             break;
                         case "get":
                             i = i + 2;
@@ -134,8 +142,8 @@ public class RedisServer {
                                 } else {
                                     String getValue = map.get(getKey);
                                     int len = getValue.length();
-                                    String res = "$"+len+"\r\n"+getValue+"\r\n";
-                                    clientSocket.getOutputStream().write(res.getBytes());
+                                    String res1 = "$"+len+"\r\n"+getValue+"\r\n";
+                                    clientSocket.getOutputStream().write(res1.getBytes());
                                 }
                             } else {
                                 clientSocket.getOutputStream().write("$-1\r\n".getBytes());

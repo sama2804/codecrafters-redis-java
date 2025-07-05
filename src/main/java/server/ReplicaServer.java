@@ -37,8 +37,6 @@ public class ReplicaServer {
         handShakeStep1();
         handShakeStep2();
         handShakeStep3();
-
-
     }
 
     private void handShakeStep1() throws IOException {
