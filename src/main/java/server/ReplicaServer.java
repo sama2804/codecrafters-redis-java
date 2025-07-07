@@ -123,30 +123,31 @@ public class ReplicaServer {
         String line;
         int offset = 0;
         while ((line = reader.readLine()) != null) {
-            System.out.println("Received: " + line);
+            System.out.println("PropagatedCommands Received: " + line);
             String command = line.toLowerCase();
 
             offset = offset + command.getBytes().length;
+            offset += 2; // Add 2 for \r\n
 
             switch (command) {
                 case "replconf":
                     line = reader.readLine();
                     offset += line.getBytes().length;
+                    offset += 2;
 
                     if (reader.readLine().toLowerCase().equals("getack")) {
-                        offset += "getack".getBytes().length;
-
-                        line = reader.readLine();
-                        offset += line.getBytes().length;
+                        reader.readLine();
 
                         if (reader.readLine().toLowerCase().equals("*")) {
-                            offset += "*".getBytes().length;
                             String resp = "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$" + String.valueOf(globalOffset).length() + "\r\n" + globalOffset + "\r\n";
                             masterOpStream.write(resp.getBytes());
                             masterOpStream.flush();
+                            offset = 37;
                         }
                     }
                     globalOffset += offset;
+                    offset = 0;
+
                     break;
                 case "set":
 //                    Instant currentTimestamp = Instant.now();
@@ -154,15 +155,19 @@ public class ReplicaServer {
 
                     line = reader.readLine();
                     offset += line.getBytes().length;
+                    offset += 2;
 
                     String key = reader.readLine();
                     offset += key.getBytes().length;
+                    offset += 2;
 
                     line = reader.readLine();
                     offset += line.getBytes().length;
+                    offset += 2;
 
                     String value = reader.readLine();
                     offset += value.getBytes().length;
+                    offset += 2;
 
                     map.put(key, value);
 //                    if ( (i+2) < splitedString.length && splitedString[i + 2].toLowerCase().equals("px")) {
@@ -171,9 +176,11 @@ public class ReplicaServer {
 //                                expiryMap.put(key, epochMilli + expiry);
 //                            }
                     globalOffset += offset;
+                    offset = 0;
                     break;
                 case "ping":
                     globalOffset += offset;
+                    offset = 0;
                     break;
                 default:
                     System.out.println("In Default while processing propagated commands. line: " + line);
