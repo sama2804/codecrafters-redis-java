@@ -21,6 +21,7 @@ public class ReplicaServer {
     ExecutorService executorService = Executors.newFixedThreadPool(2);
     private HashMap<String, String> map = new HashMap<>();
     private HashMap<String, Long> expiryMap = new HashMap<>();
+    private static int globalOffset = 0;
 
 
     public ReplicaServer(RedisServerConfig config) {
@@ -120,29 +121,48 @@ public class ReplicaServer {
 
     private void processPropagatedCommands(BufferedReader reader) throws IOException {
         String line;
+        int offset = 0;
         while ((line = reader.readLine()) != null) {
             System.out.println("Received: " + line);
+            String command = line.toLowerCase();
 
-            switch (line.toLowerCase()) {
+            offset = offset + command.getBytes().length;
+
+            switch (command) {
                 case "replconf":
-                    reader.readLine();
+                    line = reader.readLine();
+                    offset += line.getBytes().length;
+
                     if (reader.readLine().toLowerCase().equals("getack")) {
-                        reader.readLine();
+                        offset += "getack".getBytes().length;
+
+                        line = reader.readLine();
+                        offset += line.getBytes().length;
+
                         if (reader.readLine().toLowerCase().equals("*")) {
-                            masterOpStream.write("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n0\r\n".getBytes());
+                            offset += "*".getBytes().length;
+                            String resp = "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$" + String.valueOf(globalOffset).length() + "\r\n" + globalOffset + "\r\n";
+                            masterOpStream.write(resp.getBytes());
                             masterOpStream.flush();
                         }
                     }
+                    globalOffset += offset;
                     break;
                 case "set":
 //                    Instant currentTimestamp = Instant.now();
 //                    long epochMilli = currentTimestamp.toEpochMilli();
 
-                    reader.readLine();
-                    String key = reader.readLine();
+                    line = reader.readLine();
+                    offset += line.getBytes().length;
 
-                    reader.readLine();
+                    String key = reader.readLine();
+                    offset += key.getBytes().length;
+
+                    line = reader.readLine();
+                    offset += line.getBytes().length;
+
                     String value = reader.readLine();
+                    offset += value.getBytes().length;
 
                     map.put(key, value);
 //                    if ( (i+2) < splitedString.length && splitedString[i + 2].toLowerCase().equals("px")) {
@@ -150,7 +170,10 @@ public class ReplicaServer {
 //                                long expiry =  Long.parseLong(splitedString[i]);
 //                                expiryMap.put(key, epochMilli + expiry);
 //                            }
-
+                    globalOffset += offset;
+                    break;
+                case "ping":
+                    globalOffset += offset;
                     break;
                 default:
                     System.out.println("In Default while processing propagated commands. line: " + line);
