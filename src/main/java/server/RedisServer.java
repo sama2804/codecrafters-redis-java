@@ -105,6 +105,7 @@ public class RedisServer {
                                 clientSocket.getOutputStream().write(("$" + contents.length + "\r\n").getBytes());
                                 clientSocket.getOutputStream().write(contents);
                             }
+                            break;
                         case "set":
                             Instant currentTimestamp = Instant.now();
                             long epochMilli = currentTimestamp.toEpochMilli();

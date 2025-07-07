@@ -96,7 +96,7 @@ public class ReplicaServer {
         String content = reader.readLine();
         System.out.println("request_PSYNC->" + content);
 
-        content = reader.readLine();
+        reader.readLine();
 
         char[] buffer = new char[88];
         int read = 0;
@@ -109,45 +109,51 @@ public class ReplicaServer {
 
         new Thread(() -> {
             try {
-                processPropagatedCommands();
+                processPropagatedCommands(reader);
             } catch (Exception e) {
                 System.out.println("Exception: " + e.getMessage());
             }
         }).start();
+
     }
 
-    private void processPropagatedCommands() throws IOException {
-        responseBytes = new byte[1024];
-        int bytesRead;
-        while ((bytesRead = masterIpStream.read(responseBytes)) != -1) {
-//            System.out.println("Read " + bytesRead + " bytes");
-            String data = new String(responseBytes, 0, bytesRead);
-//            System.out.println("Received: " + data);
 
-            if (data.startsWith("*")) {
-                String[] splitedString = data.split("\r\n");
-                for (int i = 2; i < splitedString.length; i++) {
-                    switch (splitedString[i].toLowerCase()) {
-                        case "set":
-                            Instant currentTimestamp = Instant.now();
-                            long epochMilli = currentTimestamp.toEpochMilli();
+    private void processPropagatedCommands(BufferedReader reader) throws IOException {
+        String line;
+        while ((line = reader.readLine()) != null) {
+            System.out.println("Received: " + line);
 
-                            i = i + 2;
-                            String key = splitedString[i];
-                            i = i + 2;
-                            String value = splitedString[i];
-                            map.put(key, value);
-
-                            if ( (i+2) < splitedString.length && splitedString[i + 2].toLowerCase().equals("px")) {
-                                i = i+4;
-                                long expiry =  Long.parseLong(splitedString[i]);
-                                expiryMap.put(key, epochMilli + expiry);
-                            }
-                            break;
-                        default:
-                            System.out.println("In Default while processing propagated commands. splitedString[i]: " + splitedString[i]);
+            switch (line.toLowerCase()) {
+                case "replconf":
+                    reader.readLine();
+                    if (reader.readLine().toLowerCase().equals("getack")) {
+                        reader.readLine();
+                        if (reader.readLine().toLowerCase().equals("*")) {
+                            masterOpStream.write("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n0\r\n".getBytes());
+                            masterOpStream.flush();
+                        }
                     }
-                }
+                    break;
+                case "set":
+//                    Instant currentTimestamp = Instant.now();
+//                    long epochMilli = currentTimestamp.toEpochMilli();
+
+                    reader.readLine();
+                    String key = reader.readLine();
+
+                    reader.readLine();
+                    String value = reader.readLine();
+
+                    map.put(key, value);
+//                    if ( (i+2) < splitedString.length && splitedString[i + 2].toLowerCase().equals("px")) {
+//                                i = i+4;
+//                                long expiry =  Long.parseLong(splitedString[i]);
+//                                expiryMap.put(key, epochMilli + expiry);
+//                            }
+
+                    break;
+                default:
+                    System.out.println("In Default while processing propagated commands. line: " + line);
             }
         }
     }
