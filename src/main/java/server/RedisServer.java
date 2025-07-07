@@ -186,7 +186,13 @@ public class RedisServer {
                             break;
 
                         case "wait":
-                            clientSocket.getOutputStream().write(":0\r\n".getBytes());
+                            i = i + 2;
+                            String arg1 = splitedString[i];
+                            i = i + 2;
+                            String arg2 = splitedString[i];
+                            System.out.println(arg1 + " " + arg2);
+                            String replicaCountResp = ":" + replicaSocketList.size() + "\r\n";
+                            clientSocket.getOutputStream().write(replicaCountResp.getBytes());
                             break;
                     }
                     i++;
