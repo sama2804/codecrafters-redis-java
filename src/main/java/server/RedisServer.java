@@ -184,6 +184,10 @@ public class RedisServer {
                             }
                             // ToDo: Add support for info command called without replication. Respond with all info
                             break;
+
+                        case "wait":
+                            clientSocket.getOutputStream().write(":0\r\n".getBytes());
+                            break;
                     }
                     i++;
                 }
