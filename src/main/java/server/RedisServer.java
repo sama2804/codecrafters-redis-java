@@ -58,7 +58,7 @@ public class RedisServer {
     }
 
     private void handleClient(Socket clientSocket) {
-        HashMap<String, String> map = new HashMap<>();
+        HashMap<String, Object> map = new HashMap<>();
         HashMap<String, Long> expiryMap = new HashMap<>();
 
         try{
@@ -118,6 +118,18 @@ public class RedisServer {
                                 clientSocket.getOutputStream().write(contents);
                             }
                             break;
+                        case "type":
+                            i = i + 2;
+                            String typeCommandArg = splitedString[i];
+                            if (map.containsKey(typeCommandArg)) {
+                                Object val = map.get(typeCommandArg);
+                                if (val instanceof String) {
+                                    clientSocket.getOutputStream().write("+string\r\n".getBytes());
+                                }
+                            } else {
+                                clientSocket.getOutputStream().write("+none\r\n".getBytes());
+                            }
+                            break;
                         case "set":
                             Instant currentTimestamp = Instant.now();
                             long epochMilli = currentTimestamp.toEpochMilli();
@@ -159,9 +171,15 @@ public class RedisServer {
                                     expiryMap.remove(getKey);
                                     clientSocket.getOutputStream().write("$-1\r\n".getBytes());
                                 } else {
-                                    String getValue = map.get(getKey);
-                                    int len = getValue.length();
-                                    String res1 = "$"+len+"\r\n"+getValue+"\r\n";
+                                    int len = 0;
+                                    String val = "";
+                                    Object getValue = map.get(getKey);
+                                    if (getValue instanceof String) {
+                                        val = (String) getValue;
+                                        len = val.length();
+                                    }
+
+                                    String res1 = "$"+len+"\r\n"+val+"\r\n";
                                     clientSocket.getOutputStream().write(res1.getBytes());
                                 }
                             } else {
