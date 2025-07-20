@@ -22,7 +22,7 @@ public class RedisServer {
     private ConcurrentHashMap<Socket, Integer> replicaSocketToReplConfGetAckCount = new ConcurrentHashMap<>();
     private ConcurrentHashMap<Socket, Integer> replicaSocketToReplOffset = new ConcurrentHashMap<>();
     private int masterOffset = 0;
-
+    private String lastStreamId = null;
     ExecutorService executorService = Executors.newFixedThreadPool(10);
 
     public RedisServer(RedisServerConfig redisServerConfig) {
@@ -171,14 +171,36 @@ public class RedisServer {
                             i = i + 2;
                             String xaddVal = splitedString[i];
 
-                            RedisStream rd = new RedisStream(id, k, xaddVal);
-                            map.put(streamKey, rd);
-
-                            String message = String.format("$%s\r\n%s\r\n", id.length(), id);
-                            clientSocket.getOutputStream().write(message.getBytes());
-
+                            // ToDo: Verify if offset should be only maintained for successful ops or all
                             masterOffset += inputString.getBytes().length;
                             masterOffset += 2;
+                            String[] currIdArr = id.split("-");
+                            String errorMessage = "-ERR The ID specified in XADD is equal or smaller than the target stream top item\r\n";
+                            if (lastStreamId != null) {
+                                String prevStreamId = lastStreamId;
+                                String[] prevStreamIdArr = prevStreamId.split("-");
+                                if (Long.parseLong(currIdArr[0]) <= 0 && Long.parseLong(currIdArr[1]) <= 0){
+                                    clientSocket.getOutputStream().write("-ERR The ID specified in XADD must be greater than 0-0\r\n".getBytes());
+                                    break;
+                                } else if (Long.parseLong(currIdArr[0]) < Long.parseLong(prevStreamIdArr[0])) {
+                                    clientSocket.getOutputStream().write(errorMessage.getBytes());
+                                    break;
+                                } else if (Long.parseLong(currIdArr[0]) == Long.parseLong(prevStreamIdArr[0]) &&
+                                        Long.parseLong(currIdArr[1]) <= Long.parseLong(prevStreamIdArr[1])) {
+                                    clientSocket.getOutputStream().write(errorMessage.getBytes());
+                                    break;
+                                }
+                            }
+                            if (lastStreamId == null && Long.parseLong(currIdArr[0]) <= 0 && Long.parseLong(currIdArr[1]) <= 0) {
+                                errorMessage = "-ERR The ID specified in XADD must be greater than 0-0\r\n";
+                                clientSocket.getOutputStream().write(errorMessage.getBytes());
+                                break;
+                            }
+                            RedisStream rd = new RedisStream(id, k, xaddVal);
+                            map.put(streamKey, rd);
+                            lastStreamId = id;
+                            String message = String.format("$%s\r\n%s\r\n", id.length(), id);
+                            clientSocket.getOutputStream().write(message.getBytes());
                             break;
                         case "get":
                             i = i + 2;
