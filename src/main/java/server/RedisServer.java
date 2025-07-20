@@ -5,11 +5,10 @@ import config.RedisServerConfig;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketException;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Base64;
-import java.util.HashMap;
-import java.util.List;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -19,6 +18,9 @@ public class RedisServer {
     private ServerSocket serverSocket = null;
     private Socket clientSocket = null;
     private List<Socket> replicaSocketList = new ArrayList<>();
+    private ConcurrentHashMap<Socket, Integer> replicaSocketToReplConfGetAckCount = new ConcurrentHashMap<>();
+    private ConcurrentHashMap<Socket, Integer> replicaSocketToReplOffset = new ConcurrentHashMap<>();
+    private int masterOffset = 0;
 
     ExecutorService executorService = Executors.newFixedThreadPool(10);
 
@@ -62,14 +64,20 @@ public class RedisServer {
         try{
             while(true) {
                 byte[] input = new byte[1024];
-                clientSocket.getInputStream().read(input);
+                int port = clientSocket.getPort();
+                int bytesRead = clientSocket.getInputStream().read(input);
+                if (bytesRead == -1) {
+                    System.out.println("Peer closed the connection normally. port: " + port);
+                    break;
+                }
+
                 String inputString = new String(input).trim();
 
                 if (inputString.length() == 0) {
                     continue;
                 }
 
-                System.out.println("Client Received: " + inputString);
+                System.out.println("Thread: " + Thread.currentThread().getId() + " Client Received: " + inputString);
                 String[] splitedString = inputString.split("\r\n");
 
                 for (int i = 2; i < splitedString.length; i++) {
@@ -92,6 +100,10 @@ public class RedisServer {
                                 if (splitedString[i].equals("psync2")) {
                                     clientSocket.getOutputStream().write("+OK\r\n".getBytes());
                                 }
+                            } else if (splitedString[i].toLowerCase().equals("ack")) {
+                                i = i + 2;
+                                int replicaOffset = Integer.parseInt(splitedString[i]);
+                                replicaSocketToReplOffset.put(clientSocket, replicaOffset);
                             }
                             break;
                         case "psync":
@@ -121,7 +133,6 @@ public class RedisServer {
                                 long expiry =  Long.parseLong(splitedString[i]);
                                 expiryMap.put(key, epochMilli + expiry);
                             }
-                            clientSocket.getOutputStream().write("+OK\r\n".getBytes());
 
                             for (Socket replicaSocket : replicaSocketList) {
                                 if (replicaSocket != null) {
@@ -131,6 +142,9 @@ public class RedisServer {
                                     System.out.println("Replica Socket is null");
                                 }
                             }
+                            clientSocket.getOutputStream().write("+OK\r\n".getBytes());
+                            masterOffset += inputString.getBytes().length;
+                            masterOffset += 2;
                             break;
                         case "get":
                             i = i + 2;
@@ -186,20 +200,60 @@ public class RedisServer {
                             break;
 
                         case "wait":
+                            Instant currentTimestampWaitCommand = Instant.now();
+                            long startEpochMilliWaitCommand = currentTimestampWaitCommand.toEpochMilli();
+
                             i = i + 2;
-                            String arg1 = splitedString[i];
+                            int expectedReplicaCount = Integer.parseInt(splitedString[i]);
                             i = i + 2;
-                            String arg2 = splitedString[i];
-                            System.out.println(arg1 + " " + arg2);
-                            String replicaCountResp = ":" + replicaSocketList.size() + "\r\n";
-                            clientSocket.getOutputStream().write(replicaCountResp.getBytes());
+                            long timeoutMilli = Long.parseLong(splitedString[i]);
+                            System.out.println(expectedReplicaCount + " " + timeoutMilli);
+
+                            long timeoutInstance = startEpochMilliWaitCommand + timeoutMilli;
+                            Set<Socket> verifiedReplica = new HashSet<>();
+                            Set<Socket> contactedReplica = new HashSet<>();
+                            while (Instant.now().toEpochMilli() < timeoutInstance && verifiedReplica.size() < expectedReplicaCount) {
+                                for (Socket replicaSocket : replicaSocketList) {
+                                    if (verifiedReplica.contains(replicaSocket)) {
+                                        continue;
+                                    }
+                                    if (replicaSocket != null) {
+                                        if (!contactedReplica.contains(replicaSocket)) {
+                                            String replConfGetAck = "*3\r\n$8\r\nREPLCONF\r\n$6\r\nGETACK\r\n$1\r\n*\r\n";
+                                            replicaSocket.getOutputStream().write(replConfGetAck.getBytes());
+                                            contactedReplica.add(replicaSocket);
+                                            replicaSocketToReplConfGetAckCount.put(replicaSocket,
+                                                    replicaSocketToReplConfGetAckCount.getOrDefault(replicaSocket, 0) + 1);
+                                        }
+
+                                        int replicaOffset = replicaSocketToReplOffset.getOrDefault(replicaSocket, 0);
+                                        if (replicaOffset == 0) {
+                                            continue;
+                                        }
+                                        int replicaOffsetExcludingGetAck = replicaOffset - (37 * (replicaSocketToReplConfGetAckCount.get(replicaSocket) - 1));
+                                        if (masterOffset == replicaOffsetExcludingGetAck) {
+                                            verifiedReplica.add(replicaSocket);
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (masterOffset == 0) {
+                                String replicaCountResp = ":" + replicaSocketList.size() + "\r\n";
+                                clientSocket.getOutputStream().write(replicaCountResp.getBytes());
+                            } else {
+                                String replicaCountResp = ":" + verifiedReplica.size() + "\r\n";
+                                clientSocket.getOutputStream().write(replicaCountResp.getBytes());
+                            }
                             break;
                     }
                     i++;
                 }
             }
+        } catch (SocketException e) {
+            System.out.println("Handle Client SocketException: " + e.getMessage());
         } catch (Exception e) {
-            System.out.println("IOException: " + e.getMessage());
+            System.out.println("Handle Client IOException: " + e.getMessage());
             e.printStackTrace();
         }
     }
