@@ -10,4 +10,16 @@ public class RedisStream {
         this.key = key;
         this.value = value;
     }
+
+    public String getId(){
+        return this.id;
+    }
+
+    public String getKey(){
+        return this.key;
+    }
+
+    public String getValue(){
+        return this.value;
+    }
 }

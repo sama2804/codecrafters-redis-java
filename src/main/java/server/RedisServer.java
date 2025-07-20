@@ -126,8 +126,11 @@ public class RedisServer {
                                 Object val = map.get(typeCommandArg);
                                 if (val instanceof String) {
                                     clientSocket.getOutputStream().write("+string\r\n".getBytes());
-                                } else if (val instanceof RedisStream) {
-                                    clientSocket.getOutputStream().write("+stream\r\n".getBytes());
+                                } else if (val instanceof List) {
+                                    List<?> list = (List<?>) val;
+                                    if (!list.isEmpty() && list.get(0) instanceof RedisStream) {
+                                        clientSocket.getOutputStream().write("+stream\r\n".getBytes());
+                                    }
                                 }
                             } else {
                                 clientSocket.getOutputStream().write("+none\r\n".getBytes());
@@ -176,7 +179,7 @@ public class RedisServer {
                             masterOffset += 2;
                             String[] currIdArr = id.split("-");
                             String errorMessage = "-ERR The ID specified in XADD is equal or smaller than the target stream top item\r\n";
-                            if (lastStreamId != null) {
+                            if (!currIdArr[1].equals("*") && lastStreamId != null) {
                                 String prevStreamId = lastStreamId;
                                 String[] prevStreamIdArr = prevStreamId.split("-");
                                 if (Long.parseLong(currIdArr[0]) <= 0 && Long.parseLong(currIdArr[1]) <= 0){
@@ -191,13 +194,50 @@ public class RedisServer {
                                     break;
                                 }
                             }
-                            if (lastStreamId == null && Long.parseLong(currIdArr[0]) <= 0 && Long.parseLong(currIdArr[1]) <= 0) {
+                            if (!currIdArr[1].equals("*") && lastStreamId == null && Long.parseLong(currIdArr[0]) <= 0 && Long.parseLong(currIdArr[1]) <= 0) {
                                 errorMessage = "-ERR The ID specified in XADD must be greater than 0-0\r\n";
                                 clientSocket.getOutputStream().write(errorMessage.getBytes());
                                 break;
                             }
-                            RedisStream rd = new RedisStream(id, k, xaddVal);
-                            map.put(streamKey, rd);
+                            List<RedisStream> rdArr = new ArrayList<>();
+                            if (currIdArr[1].equals("*") && map.containsKey(streamKey)) {
+                                rdArr = (List<RedisStream>) map.get(streamKey);
+                                Map<Long, Long> lastIdMap = new HashMap<>();
+                                for (RedisStream r : rdArr) {
+                                    String[] str = r.getId().split("-");
+                                    long part1 = Long.parseLong(str[0]);
+                                    long part2 = Long.parseLong(str[1]);
+                                    if (lastIdMap.containsKey(part1) && lastIdMap.get(part1) > part2) {
+                                        continue;
+                                    }
+                                    lastIdMap.put(part1, part2);
+                                }
+                                long idSecondpart;
+                                if (lastIdMap.containsKey(Long.parseLong(currIdArr[0]))) {
+                                    idSecondpart = lastIdMap.get(Long.parseLong(currIdArr[0])) + 1;
+                                } else {
+                                    if (Long.parseLong(currIdArr[0]) > 0){
+                                        idSecondpart = 0;
+                                    } else {
+                                        idSecondpart = 1;
+                                    }
+                                }
+                                id = currIdArr[0] + "-" +idSecondpart;
+                                RedisStream rd = new RedisStream(id, k, xaddVal);
+                                rdArr.add(rd);
+                            } else {
+
+                                if (currIdArr[1].equals("*")){
+                                    long idSecondpart = 0;
+                                    if (Long.parseLong(currIdArr[0]) == 0){
+                                        idSecondpart = 1;
+                                    }
+                                    id = currIdArr[0] + "-" +idSecondpart;
+                                }
+                                RedisStream rd = new RedisStream(id, k, xaddVal);
+                                rdArr.add(rd);
+                            }
+                            map.put(streamKey, rdArr);
                             lastStreamId = id;
                             String message = String.format("$%s\r\n%s\r\n", id.length(), id);
                             clientSocket.getOutputStream().write(message.getBytes());
