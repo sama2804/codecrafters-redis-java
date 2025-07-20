@@ -178,14 +178,26 @@ public class RedisServer {
                             masterOffset += inputString.getBytes().length;
                             masterOffset += 2;
                             String[] currIdArr = id.split("-");
+                            List<RedisStream> rdArr = new ArrayList<>();
                             String errorMessage = "-ERR The ID specified in XADD is equal or smaller than the target stream top item\r\n";
-                            if (!currIdArr[1].equals("*") && lastStreamId != null) {
+                            if (!id.equals("*") && !currIdArr[1].equals("*")) {
+                                if (Long.parseLong(currIdArr[0]) <= 0 && Long.parseLong(currIdArr[1]) <= 0) {
+                                    errorMessage = "-ERR The ID specified in XADD must be greater than 0-0\r\n";
+                                    clientSocket.getOutputStream().write(errorMessage.getBytes());
+                                    break;
+                                }
+                                if (lastStreamId == null){
+                                    RedisStream rd = new RedisStream(id, k, xaddVal);
+                                    rdArr.add(rd);
+                                    map.put(streamKey, rdArr);
+                                    lastStreamId = id;
+                                    String message = String.format("$%s\r\n%s\r\n", id.length(), id);
+                                    clientSocket.getOutputStream().write(message.getBytes());
+                                    break;
+                                }
                                 String prevStreamId = lastStreamId;
                                 String[] prevStreamIdArr = prevStreamId.split("-");
-                                if (Long.parseLong(currIdArr[0]) <= 0 && Long.parseLong(currIdArr[1]) <= 0){
-                                    clientSocket.getOutputStream().write("-ERR The ID specified in XADD must be greater than 0-0\r\n".getBytes());
-                                    break;
-                                } else if (Long.parseLong(currIdArr[0]) < Long.parseLong(prevStreamIdArr[0])) {
+                                if (Long.parseLong(currIdArr[0]) < Long.parseLong(prevStreamIdArr[0])) {
                                     clientSocket.getOutputStream().write(errorMessage.getBytes());
                                     break;
                                 } else if (Long.parseLong(currIdArr[0]) == Long.parseLong(prevStreamIdArr[0]) &&
@@ -194,13 +206,8 @@ public class RedisServer {
                                     break;
                                 }
                             }
-                            if (!currIdArr[1].equals("*") && lastStreamId == null && Long.parseLong(currIdArr[0]) <= 0 && Long.parseLong(currIdArr[1]) <= 0) {
-                                errorMessage = "-ERR The ID specified in XADD must be greater than 0-0\r\n";
-                                clientSocket.getOutputStream().write(errorMessage.getBytes());
-                                break;
-                            }
-                            List<RedisStream> rdArr = new ArrayList<>();
-                            if (currIdArr[1].equals("*") && map.containsKey(streamKey)) {
+                            // id = *, 1-*, and map already contains streamKey
+                            if ((id.equals("*") || currIdArr[1].equals("*")) && map.containsKey(streamKey)) {
                                 rdArr = (List<RedisStream>) map.get(streamKey);
                                 Map<Long, Long> lastIdMap = new HashMap<>();
                                 for (RedisStream r : rdArr) {
@@ -212,22 +219,36 @@ public class RedisServer {
                                     }
                                     lastIdMap.put(part1, part2);
                                 }
-                                long idSecondpart;
-                                if (lastIdMap.containsKey(Long.parseLong(currIdArr[0]))) {
-                                    idSecondpart = lastIdMap.get(Long.parseLong(currIdArr[0])) + 1;
-                                } else {
-                                    if (Long.parseLong(currIdArr[0]) > 0){
-                                        idSecondpart = 0;
-                                    } else {
-                                        idSecondpart = 1;
+                                if (id.equals("*")){
+                                    Instant currentGetTimestamp = Instant.now();
+                                    long getEpochMilli = currentGetTimestamp.toEpochMilli();
+                                    long idTimepart = 0, idSequencepart = 0;
+                                    if (lastIdMap.containsKey(getEpochMilli)){
+                                        idSequencepart = lastIdMap.get(getEpochMilli) + 1;
                                     }
+                                    id = idTimepart + "-" + idSequencepart;
+                                } else {
+                                    long idSecondpart;
+                                    if (lastIdMap.containsKey(Long.parseLong(currIdArr[0]))) {
+                                        idSecondpart = lastIdMap.get(Long.parseLong(currIdArr[0])) + 1;
+                                    } else {
+                                        if (Long.parseLong(currIdArr[0]) > 0){
+                                            idSecondpart = 0;
+                                        } else {
+                                            idSecondpart = 1;
+                                        }
+                                    }
+                                    id = currIdArr[0] + "-" + idSecondpart;
                                 }
-                                id = currIdArr[0] + "-" +idSecondpart;
                                 RedisStream rd = new RedisStream(id, k, xaddVal);
                                 rdArr.add(rd);
                             } else {
-
-                                if (currIdArr[1].equals("*")){
+                                if (id.equals("*")){
+                                    Instant currentGetTimestamp = Instant.now();
+                                    long idTimepart = currentGetTimestamp.toEpochMilli();
+                                    long idSequencepart = 0;
+                                    id = idTimepart + "-" + idSequencepart;
+                                } else if (currIdArr[1].equals("*")){
                                     long idSecondpart = 0;
                                     if (Long.parseLong(currIdArr[0]) == 0){
                                         idSecondpart = 1;
