@@ -1,6 +1,7 @@
 package server;
 
 import config.RedisServerConfig;
+import utils.RedisStream;
 
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -125,6 +126,8 @@ public class RedisServer {
                                 Object val = map.get(typeCommandArg);
                                 if (val instanceof String) {
                                     clientSocket.getOutputStream().write("+string\r\n".getBytes());
+                                } else if (val instanceof RedisStream) {
+                                    clientSocket.getOutputStream().write("+stream\r\n".getBytes());
                                 }
                             } else {
                                 clientSocket.getOutputStream().write("+none\r\n".getBytes());
@@ -155,6 +158,25 @@ public class RedisServer {
                                 }
                             }
                             clientSocket.getOutputStream().write("+OK\r\n".getBytes());
+                            masterOffset += inputString.getBytes().length;
+                            masterOffset += 2;
+                            break;
+                        case "xadd":
+                            i = i + 2;
+                            String streamKey = splitedString[i];
+                            i = i + 2;
+                            String id = splitedString[i];
+                            i = i + 2;
+                            String k = splitedString[i];
+                            i = i + 2;
+                            String xaddVal = splitedString[i];
+
+                            RedisStream rd = new RedisStream(id, k, xaddVal);
+                            map.put(streamKey, rd);
+
+                            String message = String.format("$%s\r\n%s\r\n", id.length(), id);
+                            clientSocket.getOutputStream().write(message.getBytes());
+
                             masterOffset += inputString.getBytes().length;
                             masterOffset += 2;
                             break;
